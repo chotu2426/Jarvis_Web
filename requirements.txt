@@ -4,4 +4,6 @@ wikipedia
 pyjokes
 SpeechRecognition
 psutil
+PyAudio
+
 
