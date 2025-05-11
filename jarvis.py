@@ -1,19 +1,21 @@
+import threading
+import subprocess
+import shlex
+import time
+import requests
+import speech_recognition as sr
 from flask import Flask, render_template, request, jsonify
 import datetime
 import psutil
 import os
 import webbrowser
-import threading
-import time
-import requests
-import subprocess
-import shlex
 
+# === Flask App Setup ===
 app = Flask(__name__)
 todos = []
 reminders = []
 
-# ✅ Speak via subprocess to avoid run loop error
+# === Voice Engine ===
 def speak(text):
     try:
         safe_text = shlex.quote(text)
@@ -21,7 +23,7 @@ def speak(text):
     except Exception as e:
         print("Error in speaking:", e)
 
-# ✅ Background thread to check reminders
+# === Reminder Thread ===
 def reminder_checker():
     while True:
         now = datetime.datetime.now().strftime("%H:%M")
@@ -111,18 +113,6 @@ def process():
         todos.append(note)
         response = f"Noted: {note}"
 
-    elif "weather" in command:
-        api_key = "your_openweathermap_api_key"  # Replace
-        city = "your_city"  # Replace
-        url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric"
-        r = requests.get(url).json()
-        if r.get("main"):
-            temp = r['main']['temp']
-            desc = r['weather'][0]['description']
-            response = f"Current temperature in {city} is {temp}°C with {desc}."
-        else:
-            response = "Sorry, I couldn't fetch the weather."
-
     elif "search" in command:
         query = command.replace("search", "").strip()
         webbrowser.open(f"https://www.google.com/search?q={query}")
@@ -148,5 +138,53 @@ def process():
     speak(response)
     return jsonify({"response": response})
 
+# === Wake Word Listener ===
+def wake_word_listener():
+    recognizer = sr.Recognizer()
+    mic = sr.Microphone()
+    WAKE_WORD = "jarvis"
+
+    with mic as source:
+        recognizer.adjust_for_ambient_noise(source)
+        print("👂 Listening for wake word...")
+
+        while True:
+            try:
+                audio = recognizer.listen(source)
+                phrase = recognizer.recognize_google(audio).lower()
+                print(f"🎧 Heard: {phrase}")
+                if WAKE_WORD in phrase:
+                    print("✅ Wake word detected.")
+                    speak("Yes, how can I help?")
+                    listen_for_command(recognizer, mic)
+                    time.sleep(1)
+            except sr.UnknownValueError:
+                continue
+            except sr.RequestError as e:
+                print("⚠️ API unavailable:", e)
+                speak("Internet connection issue.")
+                time.sleep(5)
+
+def listen_for_command(recognizer, mic):
+    with mic as source:
+        print("🎙 Listening for command...")
+        audio = recognizer.listen(source)
+
+    try:
+        command = recognizer.recognize_google(audio).lower()
+        print(f"👉 Command: {command}")
+        response = requests.post("http://127.0.0.1:5000/process", json={"command": command})
+        print("💬 Jarvis:", response.json().get("response", "No response."))
+    except sr.UnknownValueError:
+        speak("Sorry, I didn't catch that.")
+    except sr.RequestError:
+        speak("Speech service error occurred.")
+
+# === Launch Everything ===
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Start Flask app in background thread
+    flask_thread = threading.Thread(target=lambda: app.run(debug=False, use_reloader=False))
+    flask_thread.start()
+
+    # Run wake word listener in main thread
+    wake_word_listener()

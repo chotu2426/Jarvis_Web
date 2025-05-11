@@ -2,92 +2,106 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>JARVIS Web</title>
+    <title>Jarvis - Voice Assistant</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', sans-serif;
             text-align: center;
-            padding-top: 40px;
-            background-color: #f4f4f4;
-        }
-        input[type="text"] {
-            padding: 10px;
-            width: 50%;
-            font-size: 16px;
-        }
-        button {
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
-            margin-left: 5px;
+            margin: 50px auto;
+            background-color: #0e0e0e;
+            color: #00ffcc;
         }
         h1 {
-            color: #333;
+            font-size: 3rem;
+            margin-bottom: 10px;
         }
-        p {
-            font-size: 18px;
-            margin-top: 20px;
+        #status {
+            font-size: 1.3rem;
+            margin-bottom: 20px;
         }
-        a {
-            color: blue;
+        #output {
+            font-size: 1.2rem;
+            color: #ffd700;
+            margin-bottom: 20px;
         }
-        ul {
-            list-style-type: none;
-            padding: 0;
-        }
-        li {
-            background-color: white;
-            margin: 5px auto;
-            padding: 10px;
-            max-width: 600px;
-            border-radius: 5px;
-            box-shadow: 0 0 5px rgba(0,0,0,0.1);
+        #log {
+            border: 1px solid #333;
+            background-color: #1a1a1a;
+            padding: 15px;
+            width: 80%;
+            margin: auto;
+            max-height: 300px;
+            overflow-y: auto;
             text-align: left;
+            border-radius: 10px;
         }
+        .user { color: #61dafb; margin-bottom: 5px; }
+        .jarvis { color: #90ee90; margin-bottom: 15px; }
     </style>
 </head>
 <body>
-    <h1>JARVIS - Web Assistant</h1>
-    <form method="POST">
-        <input type="text" name="command" placeholder="Enter your command here" required>
-        <button type="submit">Submit</button>
-        <button type="button" onclick="startListening()">🎤 Speak</button>
-    </form>
-
-    {% if response %}
-        <h3>Response:</h3>
-        <p>{{ response|safe }}</p>
-        <script>
-            const response = "{{ response|escapejs }}";
-            const utterance = new SpeechSynthesisUtterance(response);
-            speechSynthesis.speak(utterance);
-        </script>
-    {% endif %}
-
-    {% if history %}
-        <h3>Command History:</h3>
-        <ul>
-            {% for cmd, resp in history %}
-                <li><strong>{{ cmd }}</strong>: {{ resp|safe }}</li>
-            {% endfor %}
-        </ul>
-    {% endif %}
+    <h1>Jarvis Voice Assistant</h1>
+    <p id="status">Listening for wake word: "Jarvis"...</p>
+    <p id="output"></p>
+    <div id="log"></div>
 
     <script>
-        function startListening() {
-            const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-            recognition.lang = 'en-US';
-            recognition.start();
+        const synth = window.speechSynthesis;
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.continuous = true;
+        recognition.interimResults = false;
+        recognition.lang = 'en-US';
 
-            recognition.onresult = function(event) {
-                document.querySelector('input[name="command"]').value = event.results[0][0].transcript;
-            };
+        let wakeWordHeard = false;
 
-            recognition.onerror = function(event) {
-                alert("Speech recognition error: " + event.error);
-            };
+        function speak(text) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'en-US';
+            synth.speak(utterance);
         }
+
+        function sendCommand(command) {
+            // Log user command
+            const logDiv = document.getElementById("log");
+            logDiv.innerHTML += `<div class="user"><strong>You:</strong> ${command}</div>`;
+
+            fetch('/process', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ command: command })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const jarvisReply = data.response;
+                document.getElementById('output').innerText = "Jarvis: " + jarvisReply;
+                logDiv.innerHTML += `<div class="jarvis"><strong>Jarvis:</strong> ${jarvisReply}</div>`;
+                logDiv.scrollTop = logDiv.scrollHeight; // auto-scroll
+                speak(jarvisReply);
+            });
+        }
+
+        recognition.onresult = function(event) {
+            const transcript = event.results[event.results.length - 1][0].transcript.trim().toLowerCase();
+            if (!wakeWordHeard && transcript.includes("jarvis")) {
+                wakeWordHeard = true;
+                document.getElementById('status').innerText = "Jarvis is listening...";
+                speak("Yes Sir, how can I help you?");
+            } else if (wakeWordHeard) {
+                document.getElementById('status').innerText = "Processing: " + transcript;
+                sendCommand(transcript);
+                wakeWordHeard = false;
+                setTimeout(() => {
+                    document.getElementById('status').innerText = "Listening for wake word: 'Jarvis'...";
+                }, 1500);
+            }
+        };
+
+        recognition.onerror = function(event) {
+            console.error(event.error);
+            document.getElementById('status').innerText = "Error: " + event.error;
+        };
+
+        recognition.start();
     </script>
 </body>
 </html>
-
