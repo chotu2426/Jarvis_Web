@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>JARVIS Web</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding-top: 40px;
+            background-color: #f4f4f4;
+        }
+        input[type="text"] {
+            padding: 10px;
+            width: 50%;
+            font-size: 16px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-left: 5px;
+        }
+        h1 {
+            color: #333;
+        }
+        p {
+            font-size: 18px;
+            margin-top: 20px;
+        }
+        a {
+            color: blue;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        li {
+            background-color: white;
+            margin: 5px auto;
+            padding: 10px;
+            max-width: 600px;
+            border-radius: 5px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.1);
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <h1>JARVIS - Web Assistant</h1>
+    <form method="POST">
+        <input type="text" name="command" placeholder="Enter your command here" required>
+        <button type="submit">Submit</button>
+        <button type="button" onclick="startListening()">🎤 Speak</button>
+    </form>
+
+    {% if response %}
+        <h3>Response:</h3>
+        <p>{{ response|safe }}</p>
+        <script>
+            const response = "{{ response|escapejs }}";
+            const utterance = new SpeechSynthesisUtterance(response);
+            speechSynthesis.speak(utterance);
+        </script>
+    {% endif %}
+
+    {% if history %}
+        <h3>Command History:</h3>
+        <ul>
+            {% for cmd, resp in history %}
+                <li><strong>{{ cmd }}</strong>: {{ resp|safe }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    <script>
+        function startListening() {
+            const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+            recognition.lang = 'en-US';
+            recognition.start();
+
+            recognition.onresult = function(event) {
+                document.querySelector('input[name="command"]').value = event.results[0][0].transcript;
+            };
+
+            recognition.onerror = function(event) {
+                alert("Speech recognition error: " + event.error);
+            };
+        }
+    </script>
+</body>
+</html>
+
