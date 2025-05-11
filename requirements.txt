@@ -3,3 +3,5 @@ Flask-Session
 wikipedia
 pyjokes
 SpeechRecognition
+psutil
+
